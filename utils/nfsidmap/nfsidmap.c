@@ -19,7 +19,9 @@
 int verbose = 0;
 char *usage = "Usage: %s [-v] [-c || [-u|-g|-r key] || -d || -l || [-t timeout] key desc]";
 
-#define MAX_ID_LEN   11
+/* Maximum number of decimal digits for a given number of bits. */
+#define DECIMAL_DIGITS(bits) ((bits) * 28 / 93 + 1)
+
 #define IDMAP_NAMESZ 128
 #define USER  1
 #define GROUP 0
@@ -191,7 +193,7 @@ static int list_keyring(const char *keyring)
  */
 static int id_lookup(char *name_at_domain, key_serial_t key, int type)
 {
-	char id[MAX_ID_LEN];
+	char id[DECIMAL_DIGITS(sizeof(unsigned int) * 8) + 1];
 	uid_t uid = 0;
 	gid_t gid = 0;
 	int rc;
