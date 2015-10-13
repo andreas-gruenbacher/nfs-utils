@@ -109,15 +109,23 @@ expire.  This is an optional parameter for
 .I /usr/sbin/nfsidmap
 and will default to 600 seconds when not specified.
 .PP
-The idmapper system uses four key descriptions:
-.PP
-	  uid: Find the UID for the given user
-.br
-	  gid: Find the GID for the given group
-.br
-	 user: Find the user name for the given UID
-.br
-	group: Find the group name for the given GID
+The idmapper system uses the following key descriptions:
+.RS 4
+.HP
+uid: Find the UID for the given user.
+Unknown users are mapped to user nobody.
+.HP
+gid: Find the GID for the given group.
+Unknown groups are mapped to group nobody.
+.HP
+xuid: Like uid, but the UIDs of known users are prefixed with \(lq+\(rq.
+.HP
+xgid: Like gid, but the GIDS of known groups are prefixed with \(lq+\(rq.
+.HP
+user: Find the user name for the given UID
+.HP
+group: Find the group name for the given GID
+.RE
 .PP
 You can choose to handle any of these individually, rather than using the
 generic upcall program.  If you would like to use your own program for a uid

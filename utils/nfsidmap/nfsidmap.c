@@ -23,8 +23,6 @@ char *usage = "Usage: %s [-v] [-c || [-u|-g|-r key] || -d || -l || [-t timeout] 
 #define DECIMAL_DIGITS(bits) ((bits) * 28 / 93 + 1)
 
 #define IDMAP_NAMESZ 128
-#define USER  1
-#define GROUP 0
 
 #define PROCKEYS "/proc/keys"
 #ifndef DEFAULT_KEYRING
@@ -191,23 +189,46 @@ static int list_keyring(const char *keyring)
 /*
  * Find either a user or group id based on the name@domain string
  */
-static int id_lookup(char *name_at_domain, key_serial_t key, int type)
+static int id_lookup(char *name_at_domain, key_serial_t key, const char *type)
 {
-	char id[DECIMAL_DIGITS(sizeof(unsigned int) * 8) + 1];
-	uid_t uid = 0;
-	gid_t gid = 0;
+	char id[1 + DECIMAL_DIGITS(sizeof(unsigned int) * 8) + 1];
 	int rc;
 
-	if (type == USER) {
+	if (strcmp(type, "uid") == 0) {
+		uid_t uid;
 		rc = nfs4_owner_to_uid(name_at_domain, &uid);
 		sprintf(id, "%u", uid);
-	} else {
+	} else if (strcmp(type, "gid") == 0) {
+		gid_t gid;
 		rc = nfs4_group_owner_to_gid(name_at_domain, &gid);
 		sprintf(id, "%u", gid);
-	}
-	if (rc < 0) {
-		xlog_errno(rc, "id_lookup: %s: failed: %m",
-			(type == USER ? "nfs4_owner_to_uid" : "nfs4_group_owner_to_gid"));
+	} else if (strcmp(type, "xuid") == 0) {
+		uid_t uid;
+		rc = nfs4_name_to_uid(name_at_domain, &uid);
+		if (rc == -ENOENT || rc == -EINVAL) {
+			/* Find out the nobody uid. */
+			rc = nfs4_owner_to_uid(name_at_domain, &uid);
+			if (rc)
+				uid = -2;
+			sprintf(id, "%u", uid);
+		} else
+			sprintf(id, "+%u", uid);
+	} else if (strcmp(type, "xgid") == 0) {
+		gid_t gid;
+		rc = nfs4_name_to_gid(name_at_domain, &gid);
+		if (rc == -ENOENT || rc == -EINVAL) {
+			/* Find out the nobody gid. */
+			rc = nfs4_group_owner_to_gid(name_at_domain, &gid);
+			if (rc)
+				gid = -2;
+			sprintf(id, "%u", gid);
+		} else
+			sprintf(id, "+%u", gid);
+	} else
+		return EXIT_FAILURE;
+
+	if (rc) {
+		xlog_errno(rc, "id_lookup: %s: failed: %m", type);
 		return EXIT_FAILURE;
 	}
 
@@ -232,6 +253,11 @@ static int id_lookup(char *name_at_domain, key_serial_t key, int type)
 			rc = EXIT_FAILURE;
 			break;
 		}
+	}
+
+	if (verbose) {
+		xlog_warn("key: 0x%lx type: %s value: %s result: %s",
+			key, type, name_at_domain, id);
 	}
 
 	return rc;
@@ -457,10 +483,11 @@ int main(int argc, char **argv)
 	/* Become a possesor of the to-be-instantiated key to set the key's timeout */
 	request_key("keyring", DEFAULT_KEYRING, NULL, KEY_SPEC_THREAD_KEYRING);
 
-	if (strcmp(type, "uid") == 0)
-		rc = id_lookup(value, key, USER);
-	else if (strcmp(type, "gid") == 0)
-		rc = id_lookup(value, key, GROUP);
+	if (strcmp(type, "uid") == 0 ||
+	    strcmp(type, "gid") == 0 ||
+	    strcmp(type, "xuid") == 0 ||
+	    strcmp(type, "xgid") == 0)
+		rc = id_lookup(value, key, type);
 	else if (strcmp(type, "user") == 0)
 		rc = name_lookup(value, key, USER);
 	else if (strcmp(type, "group") == 0)
